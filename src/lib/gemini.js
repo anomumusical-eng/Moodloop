@@ -1,6 +1,6 @@
 // REPLACE WITH YOUR GEMINI API KEY
 // Get it free at: aistudio.google.com → Get API Key
-const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY';
+const GEMINI_API_KEY = 'AIzaSyChCK73i7Q6tkAh9qQ-XurAVE5rFZpYGi4';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 export async function detectEmotion(checkinText) {

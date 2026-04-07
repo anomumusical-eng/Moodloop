@@ -1,6 +1,6 @@
 import { detectEmotion as localDetect } from './theme';
 
-const GEMINI_API_KEY = 'AIzaSyChCK73i7Q6tkAh9qQ-XurAVE5rFZpYGi4';
+const GEMINI_API_KEY = 'AIzaSyAdguFtHjg-eLSaYb512ae4Ko9UDd8xNj8';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const VALID_EMOTIONS = [

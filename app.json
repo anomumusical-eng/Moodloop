@@ -3,19 +3,19 @@
     "name": "Moodloop",
     "slug": "moodloop",
     "owner": "pikucih",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./src/assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F0A1E"
+      "backgroundColor": "#080612"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/icon.png",
-        "backgroundColor": "#0F0A1E"
+        "backgroundColor": "#080612"
       },
       "package": "com.moodloop.app",
       "permissions": ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"]
@@ -24,7 +24,6 @@
       "favicon": "./src/assets/icon.png"
     },
     "plugins": [
-      "expo-notifications",
       "expo-font"
     ],
     "extra": {

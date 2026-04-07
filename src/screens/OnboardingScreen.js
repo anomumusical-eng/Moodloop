@@ -1,91 +1,108 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import { Colors } from '../lib/theme';
+import { Button } from '../components/UI';
 
 const { width } = Dimensions.get('window');
 
-const slides = [
+const SLIDES = [
   {
     icon: '◎',
+    iconColor: Colors.accent,
     title: 'meet moodloop',
     body: 'The first app that reads how you feel and reshapes your entire day around your emotional state.',
-  },
-  {
-    icon: '⟡',
-    title: 'check in daily',
-    body: 'Just tell us how you feel in a few words. Our AI detects your emotional state in seconds.',
-  },
-  {
-    icon: '↻',
-    title: 'get your loop',
-    body: 'We build a personalised plan — music, tasks, rest reminders — perfectly matched to how you feel right now.',
+    bg: Colors.accentDim,
   },
   {
     icon: '◈',
+    iconColor: '#EF9F27',
+    title: 'check in daily',
+    body: 'Just tell us how you feel in a few words. Our AI detects your emotional state in seconds — no wearable needed.',
+    bg: '#2A1A08',
+  },
+  {
+    icon: '↻',
+    iconColor: '#1D9E75',
+    title: 'get your loop',
+    body: 'We build a personalised plan — music, tasks, rest reminders — perfectly matched to how you feel right now.',
+    bg: '#0A2018',
+  },
+  {
+    icon: '◉',
+    iconColor: Colors.accentLight,
     title: 'discover patterns',
-    body: 'Over time, Moodloop learns you. Weekly insights reveal hidden patterns in your emotional life.',
+    body: 'After a week, Moodloop reveals hidden patterns in your emotional life you never noticed before.',
+    bg: Colors.accentDim,
   },
 ];
 
 export default function OnboardingScreen({ navigation }) {
   const [current, setCurrent] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  function next() {
-    if (current < slides.length - 1) setCurrent(current + 1);
-    else navigation.replace('Home');
+  function goNext() {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+      if (current < SLIDES.length - 1) {
+        setCurrent(current + 1);
+      } else {
+        navigation.replace('Home');
+        return;
+      }
+      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    });
   }
 
-  const slide = slides[current];
+  const slide = SLIDES[current];
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.iconCircle}><Text style={styles.icon}>{slide.icon}</Text></View>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <View style={[styles.iconWrap, { backgroundColor: slide.bg }]}>
+          <Text style={[styles.icon, { color: slide.iconColor }]}>{slide.icon}</Text>
+        </View>
         <Text style={styles.title}>{slide.title}</Text>
         <Text style={styles.body}>{slide.body}</Text>
+      </Animated.View>
+
+      <View style={styles.bottom}>
+        <View style={styles.dots}>
+          {SLIDES.map((_, i) => (
+            <View key={i} style={[styles.dot, i === current && styles.dotActive]} />
+          ))}
+        </View>
+
+        <Button
+          title={current < SLIDES.length - 1 ? 'next →' : "let's go →"}
+          onPress={goNext}
+          style={styles.btn}
+        />
+
+        {current < SLIDES.length - 1 && (
+          <TouchableOpacity onPress={() => navigation.replace('Home')} style={styles.skip}>
+            <Text style={styles.skipText}>skip</Text>
+          </TouchableOpacity>
+        )}
       </View>
-
-      <View style={styles.dots}>
-        {slides.map((_, i) => (
-          <View key={i} style={[styles.dot, i === current && styles.dotActive]} />
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.btn} onPress={next}>
-        <Text style={styles.btnText}>
-          {current < slides.length - 1 ? 'next →' : "let's go →"}
-        </Text>
-      </TouchableOpacity>
-
-      {current < slides.length - 1 && (
-        <TouchableOpacity onPress={() => navigation.replace('Home')} style={styles.skip}>
-          <Text style={styles.skipText}>skip</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: 'space-between', paddingBottom: 48 },
+  container: { flex: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: 'space-between', paddingTop: 80, paddingBottom: 48 },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  iconCircle: {
+  iconWrap: {
     width: 100, height: 100, borderRadius: 50,
-    backgroundColor: Colors.accentDim,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 32,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 36,
+    borderWidth: 0.5, borderColor: Colors.borderLight,
   },
-  icon: { fontSize: 44, color: Colors.accentLight },
-  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 16, letterSpacing: 0.5 },
-  body: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', lineHeight: 26, maxWidth: 300 },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 24 },
+  icon: { fontSize: 46 },
+  title: { fontSize: 30, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 18, letterSpacing: 0.3 },
+  body: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', lineHeight: 27, maxWidth: 310 },
+  bottom: { gap: 16 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.border },
-  dotActive: { width: 20, backgroundColor: Colors.accent },
-  btn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 14, padding: 18,
-    alignItems: 'center',
-  },
-  btnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  skip: { alignItems: 'center', marginTop: 16 },
+  dotActive: { width: 22, backgroundColor: Colors.accent, borderRadius: 3 },
+  btn: {},
+  skip: { alignItems: 'center' },
   skipText: { color: Colors.textMuted, fontSize: 14 },
 });

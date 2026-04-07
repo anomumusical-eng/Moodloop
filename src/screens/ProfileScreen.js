@@ -1,74 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { supabase } from '../lib/supabase';
-import { Colors } from '../lib/theme';
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, SafeAreaView,
+  ScrollView, TouchableOpacity, Alert
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { supabase, getProfile, getCheckinCount, getWeeklyCheckinCount, getRecentLoops } from '../lib/supabase';
+import { Colors, Emotions } from '../lib/theme';
+import { Avatar, BackButton, Card, SectionLabel, ProgressBar, Button } from '../components/UI';
 
 export default function ProfileScreen({ navigation }) {
-  const [profile, setProfile] = useState(null);
-  const [stats, setStats] = useState({ total: 0, thisWeek: 0 });
+  const [profile,  setProfile]  = useState(null);
+  const [total,    setTotal]    = useState(0);
+  const [weekly,   setWeekly]   = useState(0);
+  const [loops,    setLoops]    = useState([]);
 
-  useEffect(() => { loadProfile(); }, []);
+  useFocusEffect(useCallback(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [prof, t, w, l] = await Promise.all([
+        getProfile(user.id),
+        getCheckinCount(user.id),
+        getWeeklyCheckinCount(user.id),
+        getRecentLoops(user.id, 20),
+      ]);
+      setProfile(prof);
+      setTotal(t);
+      setWeekly(w);
+      setLoops(l);
+    }
+    load();
+  }, []));
 
-  async function loadProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    setProfile(prof);
-    const { count: total } = await supabase.from('checkins').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-    const { count: thisWeek } = await supabase.from('checkins').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', weekAgo.toISOString());
-    setStats({ total: total || 0, thisWeek: thisWeek || 0 });
+  function getTopEmotions() {
+    if (!loops.length) return [];
+    const counts = {};
+    loops.forEach(l => {
+      counts[l.primary_emotion] = (counts[l.primary_emotion] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([key, count]) => ({ key, count, pct: Math.round((count / loops.length) * 100) }));
   }
 
   async function handleSignOut() {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
   }
 
   const name = profile?.full_name || 'Friend';
-  const initial = name[0]?.toUpperCase();
+  const topEmotions = getTopEmotions();
+  const insightsUnlocked = weekly >= 7;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← back</Text>
-        </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.avatarRow}>
-          <View style={styles.avatar}><Text style={styles.avatarInitial}>{initial}</Text></View>
+        <BackButton onPress={() => navigation.goBack()} />
+
+        <View style={styles.avatarSection}>
+          <Avatar name={name} size={80} />
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.email}>{profile?.email}</Text>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statVal}>{stats.total}</Text>
+            <Text style={styles.statVal}>{total}</Text>
             <Text style={styles.statLabel}>total check-ins</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statVal}>{stats.thisWeek}</Text>
+            <Text style={styles.statVal}>{weekly}</Text>
             <Text style={styles.statLabel}>this week</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statVal, { color: insightsUnlocked ? Colors.teal : Colors.textPrimary }]}>
+              {insightsUnlocked ? '✓' : `${weekly}/7`}
+            </Text>
+            <Text style={styles.statLabel}>insights</Text>
           </View>
         </View>
 
-        {stats.total < 7 && (
-          <View style={styles.insightTeaser}>
-            <Text style={styles.teaserTitle}>weekly insights locked</Text>
-            <Text style={styles.teaserText}>
-              Complete {7 - stats.thisWeek} more check-ins this week to unlock your personal emotion patterns.
+        {!insightsUnlocked && (
+          <Card>
+            <Text style={styles.insightsTitle}>weekly insights — locked</Text>
+            <Text style={styles.insightsSub}>
+              {7 - weekly} more check-in{7 - weekly !== 1 ? 's' : ''} needed this week to unlock your personal emotion patterns
             </Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${Math.min((stats.thisWeek / 7) * 100, 100)}%` }]} />
-            </View>
-            <Text style={styles.progressLabel}>{stats.thisWeek}/7 this week</Text>
-          </View>
+            <ProgressBar value={weekly} max={7} color={Colors.accent} />
+            <Text style={styles.insightsPct}>{weekly}/7 this week</Text>
+          </Card>
         )}
 
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>sign out</Text>
-        </TouchableOpacity>
+        {insightsUnlocked && topEmotions.length > 0 && (
+          <>
+            <SectionLabel title="your top emotions this week" />
+            {topEmotions.map(({ key, count, pct }) => {
+              const theme = Emotions[key] || Emotions.calm;
+              return (
+                <Card key={key} style={styles.emotionCard}>
+                  <View style={styles.emotionRow}>
+                    <View style={[styles.emotionDot, { backgroundColor: theme.accent }]} />
+                    <Text style={[styles.emotionName, { color: theme.accentLight }]}>{theme.label}</Text>
+                    <Text style={styles.emotionCount}>{count}x · {pct}%</Text>
+                  </View>
+                  <View style={styles.emotionBar}>
+                    <ProgressBar value={pct} max={100} color={theme.accent} />
+                  </View>
+                </Card>
+              );
+            })}
+          </>
+        )}
+
+        {total >= 14 && topEmotions.length > 0 && (
+          <>
+            <SectionLabel title="your emotional insight" />
+            <Card style={styles.insightBig}>
+              <Text style={styles.insightBigText}>
+                Your most common emotional state is{' '}
+                <Text style={{ color: Colors.accentLight, fontWeight: '600' }}>
+                  {Emotions[topEmotions[0]?.key]?.label || 'Calm'}
+                </Text>
+                {'. '}
+                {total >= 21
+                  ? "You've built a consistent check-in habit. Your self-awareness is genuinely growing."
+                  : "Keep checking in daily to reveal deeper patterns in your emotional life."
+                }
+              </Text>
+            </Card>
+          </>
+        )}
+
+        <View style={styles.signOutWrap}>
+          <Button title="sign out" variant="danger" onPress={handleSignOut} />
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -76,43 +146,28 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { padding: 24, paddingBottom: 40 },
-  back: { marginBottom: 24 },
-  backText: { color: Colors.textSecondary, fontSize: 15 },
-  avatarRow: { alignItems: 'center', marginBottom: 32 },
-  avatar: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.accentDim,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-  },
-  avatarInitial: { fontSize: 32, fontWeight: '700', color: Colors.accentLight },
-  name: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
+  scroll: { padding: 24, paddingBottom: 48 },
+  avatarSection: { alignItems: 'center', marginBottom: 28, marginTop: 8 },
+  name: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginTop: 14, marginBottom: 4 },
   email: { fontSize: 13, color: Colors.textMuted },
-  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
   statCard: {
     flex: 1, backgroundColor: Colors.bgCard,
-    borderRadius: 14, padding: 16, alignItems: 'center',
+    borderRadius: 14, padding: 14, alignItems: 'center',
     borderWidth: 0.5, borderColor: Colors.border,
   },
-  statVal: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
-  statLabel: { fontSize: 12, color: Colors.textMuted },
-  insightTeaser: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 14, padding: 18,
-    borderWidth: 0.5, borderColor: Colors.accentDim,
-    marginBottom: 24,
-  },
-  teaserTitle: { fontSize: 14, fontWeight: '600', color: Colors.accentLight, marginBottom: 6 },
-  teaserText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginBottom: 14 },
-  progressBar: {
-    height: 4, backgroundColor: Colors.border,
-    borderRadius: 2, marginBottom: 6, overflow: 'hidden',
-  },
-  progressFill: { height: '100%', backgroundColor: Colors.accent, borderRadius: 2 },
-  progressLabel: { fontSize: 11, color: Colors.textMuted },
-  signOutBtn: {
-    borderWidth: 0.5, borderColor: Colors.error + '66',
-    borderRadius: 12, padding: 14, alignItems: 'center',
-  },
-  signOutText: { color: Colors.error, fontSize: 14, fontWeight: '500' },
+  statVal: { fontSize: 26, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
+  statLabel: { fontSize: 10, fontWeight: '600', color: Colors.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', textAlign: 'center' },
+  insightsTitle: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 6 },
+  insightsSub: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 14 },
+  insightsPct: { fontSize: 12, color: Colors.textMuted, marginTop: 8 },
+  emotionCard: { marginBottom: 8 },
+  emotionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  emotionDot: { width: 10, height: 10, borderRadius: 5 },
+  emotionName: { flex: 1, fontSize: 14, fontWeight: '600' },
+  emotionCount: { fontSize: 12, color: Colors.textMuted },
+  emotionBar: {},
+  insightBig: {},
+  insightBigText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
+  signOutWrap: { marginTop: 24 },
 });

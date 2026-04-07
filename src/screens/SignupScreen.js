@@ -1,89 +1,104 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, ScrollView
+  View, Text, StyleSheet, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ScrollView, Alert
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Colors } from '../lib/theme';
+import { Button, Input } from '../components/UI';
 
 export default function SignupScreen({ navigation }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name,     setName]     = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
 
   async function handleSignup() {
-    if (!name || !email || !password) { Alert.alert('Missing info', 'Please fill in all fields.'); return; }
-    if (password.length < 6) { Alert.alert('Weak password', 'Password must be at least 6 characters.'); return; }
+    if (!name.trim() || !email.trim() || !password) {
+      Alert.alert('Missing info', 'Please fill in all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Weak password', 'Password must be at least 6 characters.');
+      return;
+    }
+
     setLoading(true);
+
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password,
-      options: { data: { full_name: name.trim() } }
+      options: {
+        data: { full_name: name.trim() },
+        emailRedirectTo: null,
+      },
     });
-    if (error) { Alert.alert('Signup failed', error.message); }
-    else {
-      await supabase.from('profiles').insert([{
+
+    if (error) {
+      Alert.alert('Signup failed', error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (data?.user) {
+      await supabase.from('profiles').upsert([{
         id: data.user.id,
         full_name: name.trim(),
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
       }]);
     }
+
     setLoading(false);
   }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
         <View style={styles.header}>
-          <View style={styles.logoCircle}><Text style={styles.logoIcon}>◎</Text></View>
+          <View style={styles.logoOuter}>
+            <View style={styles.logoMiddle}>
+              <View style={styles.logoInner} />
+            </View>
+          </View>
           <Text style={styles.title}>join moodloop</Text>
           <Text style={styles.subtitle}>start understanding yourself</Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>your name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="what do people call you?"
-            placeholderTextColor={Colors.textMuted}
+          <Input
+            label="your name"
             value={name}
             onChangeText={setName}
+            placeholder="what do people call you?"
+            autoCapitalize="words"
           />
-
-          <Text style={styles.label}>email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            placeholderTextColor={Colors.textMuted}
+          <Input
+            label="email"
             value={email}
             onChangeText={setEmail}
+            placeholder="you@example.com"
             autoCapitalize="none"
             keyboardType="email-address"
           />
-
-          <Text style={styles.label}>password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="at least 6 characters"
-            placeholderTextColor={Colors.textMuted}
+          <Input
+            label="password"
             value={password}
             onChangeText={setPassword}
+            placeholder="at least 6 characters"
             secureTextEntry
           />
 
-          <TouchableOpacity style={styles.btn} onPress={handleSignup} disabled={loading}>
-            {loading
-              ? <ActivityIndicator color={Colors.white} />
-              : <Text style={styles.btnText}>create account</Text>
-            }
-          </TouchableOpacity>
+          <Button title="create account" onPress={handleSignup} loading={loading} style={styles.btn} />
 
-          <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.linkText}>already have an account? <Text style={styles.linkAccent}>sign in</Text></Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.link}>
+            <Text style={styles.linkText}>
+              already have an account?{' '}
+              <Text style={styles.linkAccent}>sign in</Text>
+            </Text>
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -92,31 +107,23 @@ export default function SignupScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 28 },
-  header: { alignItems: 'center', marginBottom: 40 },
-  logoCircle: {
-    width: 64, height: 64, borderRadius: 32,
+  header: { alignItems: 'center', marginBottom: 36 },
+  logoOuter: {
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: Colors.accentDim,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+    borderWidth: 0.5, borderColor: Colors.accentGlow,
   },
-  logoIcon: { fontSize: 28, color: Colors.accentLight },
-  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, letterSpacing: 1 },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
+  logoMiddle: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center',
+  },
+  logoInner: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.accent },
+  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6, textAlign: 'center' },
+  subtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
   form: { width: '100%' },
-  label: { fontSize: 12, color: Colors.textSecondary, marginBottom: 6, letterSpacing: 1 },
-  input: {
-    backgroundColor: Colors.bgCard,
-    borderWidth: 0.5, borderColor: Colors.border,
-    borderRadius: 12, padding: 14,
-    color: Colors.textPrimary, fontSize: 15,
-    marginBottom: 18,
-  },
-  btn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 12, padding: 16,
-    alignItems: 'center', marginTop: 4, marginBottom: 20,
-  },
-  btnText: { color: Colors.white, fontSize: 16, fontWeight: '600', letterSpacing: 0.5 },
-  linkBtn: { alignItems: 'center' },
+  btn: { marginTop: 8, marginBottom: 20 },
+  link: { alignItems: 'center' },
   linkText: { color: Colors.textSecondary, fontSize: 14 },
   linkAccent: { color: Colors.accent, fontWeight: '600' },
 });

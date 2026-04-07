@@ -1,79 +1,73 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Alert
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  SafeAreaView, ActivityIndicator, KeyboardAvoidingView,
+  Platform, ScrollView, Alert
 } from 'react-native';
-import { supabase } from '../lib/supabase';
-import { detectEmotion } from '../lib/gemini';
-import { Colors } from '../lib/theme';
+import { getCurrentUser, saveCheckin, saveLoop } from '../lib/supabase';
+import { getEmotionKey } from '../lib/gemini';
+import { Colors, Emotions } from '../lib/theme';
+import { BackButton } from '../components/UI';
 
-const QUICK_MOODS = [
-  'feeling good today', 'really tired and drained',
-  'anxious about something', 'focused and ready to work',
-  'sad but okay', 'excited and energetic',
-  'stressed and overwhelmed', 'calm and peaceful',
+const QUICK_PICKS = [
+  { label: 'feeling good today',        emoji: '◉' },
+  { label: 'really tired and drained',  emoji: '◑' },
+  { label: 'anxious about something',   emoji: '◈' },
+  { label: 'focused and in the zone',   emoji: '◆' },
+  { label: 'sad and a bit low',         emoji: '◐' },
+  { label: 'excited about something',   emoji: '◎' },
+  { label: 'stressed and overwhelmed',  emoji: '⊗' },
+  { label: 'calm and at peace',         emoji: '○' },
 ];
 
+const STAGES = {
+  WRITE:     'write',
+  DETECTING: 'detecting',
+  SAVING:    'saving',
+};
+
+const STAGE_MESSAGES = {
+  detecting: 'reading your emotions...',
+  saving:    'building your loop...',
+};
+
 export default function CheckinScreen({ navigation }) {
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [stage, setStage] = useState('write'); // write | analysing
+  const [text,  setText]  = useState('');
+  const [stage, setStage] = useState(STAGES.WRITE);
 
   async function handleSubmit() {
     const checkinText = text.trim();
     if (checkinText.length < 3) {
-      Alert.alert('Tell us more', 'Write a few words about how you feel.');
+      Alert.alert('Tell us more', 'Write a few words about how you feel right now.');
       return;
     }
 
-    setLoading(true);
-    setStage('analysing');
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      setStage(STAGES.DETECTING);
+      const user = await getCurrentUser();
+      if (!user) throw new Error('Not logged in');
 
-      const emotion = await detectEmotion(checkinText);
+      const emotionKey = await getEmotionKey(checkinText);
+      const emotionData = Emotions[emotionKey] || Emotions.calm;
 
-      const { data: checkin } = await supabase.from('checkins').insert([{
-        user_id: user.id,
-        raw_text: checkinText,
-        primary_emotion: emotion.primary_emotion,
-        energy_level: emotion.energy_level,
-        focus_capacity: emotion.focus_capacity,
-        social_battery: emotion.social_battery,
-        ai_response: emotion,
-      }]).select().single();
+      setStage(STAGES.SAVING);
+      const checkin = await saveCheckin(user.id, checkinText, emotionKey, emotionData);
+      const loop    = await saveLoop(user.id, checkin.id, emotionKey, emotionData);
 
-      const { data: loop } = await supabase.from('loops').insert([{
-        user_id: user.id,
-        checkin_id: checkin.id,
-        emotion_label: emotion.emotion_label,
-        summary: emotion.summary,
-        tasks: emotion.tasks,
-        spotify_mood: emotion.spotify_mood,
-        rest_reminder: emotion.rest_reminder,
-        social_suggestion: emotion.social_suggestion,
-        energy_level: emotion.energy_level,
-        primary_emotion: emotion.primary_emotion,
-      }]).select().single();
-
-      navigation.replace('Loop', { loop, emotion });
+      navigation.replace('Loop', { loop, emotionData });
 
     } catch (err) {
-      Alert.alert('Something went wrong', 'Check your internet connection and try again.');
-      setStage('write');
+      Alert.alert('Something went wrong', err.message || 'Please check your connection and try again.');
+      setStage(STAGES.WRITE);
     }
-
-    setLoading(false);
   }
 
-  if (stage === 'analysing') {
+  if (stage !== STAGES.WRITE) {
     return (
-      <View style={styles.analysing}>
+      <View style={styles.loading}>
         <ActivityIndicator size="large" color={Colors.accent} />
-        <Text style={styles.analysingText}>reading your emotions...</Text>
-        <Text style={styles.analysingSubText}>building your loop</Text>
+        <Text style={styles.loadingText}>{STAGE_MESSAGES[stage]}</Text>
+        <Text style={styles.loadingDots}>· · ·</Text>
       </View>
     );
   }
@@ -81,18 +75,16 @@ export default function CheckinScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← back</Text>
-          </TouchableOpacity>
+          <BackButton onPress={() => navigation.goBack()} />
 
           <Text style={styles.title}>how are you feeling?</Text>
           <Text style={styles.subtitle}>be honest — this is just for you</Text>
 
           <TextInput
             style={styles.input}
-            placeholder="e.g. 'I'm tired and a bit anxious about tomorrow, but also kind of excited...'"
+            placeholder={'e.g. "I\'m exhausted and a bit anxious about tomorrow, but also kind of relieved the week is almost over..."'}
             placeholderTextColor={Colors.textMuted}
             value={text}
             onChangeText={setText}
@@ -102,25 +94,30 @@ export default function CheckinScreen({ navigation }) {
           />
 
           <Text style={styles.quickLabel}>quick picks</Text>
-          <View style={styles.quickWrap}>
-            {QUICK_MOODS.map((mood) => (
+          <View style={styles.quickGrid}>
+            {QUICK_PICKS.map(({ label, emoji }) => (
               <TouchableOpacity
-                key={mood}
-                style={[styles.quickPill, text === mood && styles.quickPillActive]}
-                onPress={() => setText(mood)}
+                key={label}
+                style={[styles.quickPill, text === label && styles.quickPillActive]}
+                onPress={() => setText(text === label ? '' : label)}
+                activeOpacity={0.7}
               >
-                <Text style={[styles.quickText, text === mood && styles.quickTextActive]}>{mood}</Text>
+                <Text style={styles.quickEmoji}>{emoji}</Text>
+                <Text style={[styles.quickText, text === label && styles.quickTextActive]}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           <TouchableOpacity
-            style={[styles.submitBtn, text.length < 3 && styles.submitBtnDisabled]}
+            style={[styles.submitBtn, text.trim().length < 3 && styles.submitBtnDisabled]}
             onPress={handleSubmit}
-            disabled={loading || text.length < 3}
+            disabled={text.trim().length < 3}
+            activeOpacity={0.85}
           >
             <Text style={styles.submitText}>get my loop →</Text>
           </TouchableOpacity>
+
+          <Text style={styles.hint}>your check-in is private and secure</Text>
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -130,36 +127,42 @@ export default function CheckinScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { padding: 24, paddingBottom: 40 },
-  backBtn: { marginBottom: 24 },
-  backText: { color: Colors.textSecondary, fontSize: 15 },
-  title: { fontSize: 26, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
+  scroll: { padding: 24, paddingBottom: 48 },
+  loading: {
+    flex: 1, backgroundColor: Colors.bg,
+    alignItems: 'center', justifyContent: 'center', gap: 16,
+  },
+  loadingText: { fontSize: 18, fontWeight: '600', color: Colors.textPrimary, marginTop: 8 },
+  loadingDots: { fontSize: 20, color: Colors.accent, letterSpacing: 4 },
+  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
   subtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: 24 },
   input: {
     backgroundColor: Colors.bgCard,
     borderWidth: 0.5, borderColor: Colors.border,
     borderRadius: 16, padding: 16,
-    color: Colors.textPrimary, fontSize: 16,
-    minHeight: 140, lineHeight: 24,
-    marginBottom: 24,
+    color: Colors.textPrimary, fontSize: 15,
+    minHeight: 150, lineHeight: 24, marginBottom: 28,
   },
-  quickLabel: { fontSize: 12, color: Colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
-  quickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 },
+  quickLabel: {
+    fontSize: 11, fontWeight: '600', color: Colors.textMuted,
+    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12,
+  },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 },
   quickPill: {
-    paddingHorizontal: 14, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
     borderRadius: 999, borderWidth: 0.5,
     borderColor: Colors.border, backgroundColor: Colors.bgCard,
   },
   quickPillActive: { backgroundColor: Colors.accentDim, borderColor: Colors.accent },
+  quickEmoji: { fontSize: 12, color: Colors.textMuted },
   quickText: { fontSize: 13, color: Colors.textSecondary },
-  quickTextActive: { color: Colors.accentLight },
+  quickTextActive: { color: Colors.accentLight, fontWeight: '500' },
   submitBtn: {
     backgroundColor: Colors.accent,
-    borderRadius: 14, padding: 18, alignItems: 'center',
+    borderRadius: 14, padding: 18, alignItems: 'center', marginBottom: 14,
   },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  analysing: { flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center', gap: 16 },
-  analysingText: { fontSize: 20, fontWeight: '600', color: Colors.textPrimary },
-  analysingSubText: { fontSize: 14, color: Colors.textSecondary },
+  submitBtnDisabled: { opacity: 0.35 },
+  submitText: { color: Colors.white, fontSize: 16, fontWeight: '600', letterSpacing: 0.3 },
+  hint: { textAlign: 'center', fontSize: 12, color: Colors.textMuted },
 });

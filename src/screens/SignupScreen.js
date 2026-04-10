@@ -49,6 +49,9 @@ export default function SignupScreen({ navigation }) {
     }
 
     setLoading(false);
+
+    // Navigate to the confirmation screen, passing the user's name
+    navigation.replace('SignupSuccess', { name: name.trim() });
   }
 
   return (

@@ -2,34 +2,43 @@
   "expo": {
     "name": "Moodloop",
     "slug": "moodloop",
-    "owner": "pikucih",
-    "version": "2.0.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./src/assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#080612"
+      "backgroundColor": "#0A0A0F"
     },
+    "scheme": "moodloop",
+    "assetBundlePatterns": ["**/*"],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/icon.png",
-        "backgroundColor": "#080612"
+        "backgroundColor": "#0A0A0F"
       },
       "package": "com.moodloop.app",
-      "permissions": ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"]
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "moodloop"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.moodloop.app"
     },
     "web": {
       "favicon": "./src/assets/icon.png"
     },
-    "plugins": [
-      "expo-font"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "06e3f5b5-9bb7-40a9-ac0f-8374e5f3efba"
-      }
-    }
+    "plugins": ["expo-router"]
   }
 }

@@ -59,6 +59,14 @@ export default function LoginScreen({ navigation }) {
             secureTextEntry
           />
 
+          {/* Forgot password link — sits between password field and sign in button */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ForgotPassword')}
+            style={styles.forgotLink}
+          >
+            <Text style={styles.forgotText}>forgot password?</Text>
+          </TouchableOpacity>
+
           <Button title="sign in" onPress={handleLogin} loading={loading} style={styles.btn} />
 
           <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.link}>
@@ -93,7 +101,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6, textAlign: 'center' },
   subtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: 32, textAlign: 'center' },
   form: { width: '100%' },
-  btn: { marginTop: 8, marginBottom: 20 },
+  forgotLink: { alignSelf: 'flex-end', marginBottom: 16, marginTop: 4 },
+  forgotText: { fontSize: 13, color: Colors.accent },
+  btn: { marginBottom: 20 },
   link: { alignItems: 'center' },
   linkText: { color: Colors.textSecondary, fontSize: 14 },
   linkAccent: { color: Colors.accent, fontWeight: '600' },
